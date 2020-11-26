@@ -1,0 +1,338 @@
+consumes:
+  - application/json
+info:
+  description: Event history service
+  title: Live feed and events service
+  version: 0.1.0
+produces:
+  - application/json
+
+schemes:
+  - http
+  - ws
+swagger: "2.0"
+
+############################################################################################################
+##### Security  definitions
+############################################################################################################
+
+securityDefinitions:
+  bearer:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: "Generic security definition for all users. This definition will be applied to all operations unless otherwise specified"
+  access_token:
+    type: apiKey
+    name: access_token
+    in: query
+    description: "Generic security definition for all users. This definition will be applied to all operations unless otherwise specified"
+
+definitions:
+  ###########################
+  ##### Auth Types Definitions
+  ###########################
+
+  principalModel:
+    type: object
+    properties:
+      ProeliumCustomerID:
+        type: string
+      ProeliumUserID:
+        type: string
+      Profile:
+        type: string
+      IsAdmin:
+        type: boolean
+      administrationPermissions:
+        $ref: "#/definitions/administrationPermissions"
+      clientsPermissions:
+        $ref: "#/definitions/clientsPermissions"
+
+  administrationPermissions:
+    type: object
+    properties:
+      canAddTeamMember:
+        type: boolean
+
+  clientsPermissions:
+    type: object
+    properties:
+      canAssignTeamMemberToClient:
+        type: boolean
+
+  ###########################
+  ##### Event Definitions
+  ###########################
+
+  createEventSubscriptionInput:
+    type: object
+    required:
+      - hookUrl
+      - eventCategory
+      - eventEntity
+      - eventType
+    properties:
+      hookUrl:
+        type: string
+      eventCategory:
+        type: string
+        description: "First-level event category"
+        enum:
+          - ENGAGEMENT
+          - SYSTEM
+        x-nullable: false
+      eventEntity:
+        type: string
+        description: "Event entity"
+        enum:
+          - EMAIL
+          - PROSPECT
+          - REPORT
+          - MAILBOX
+        x-nullable: false
+      eventType:
+        type: string
+        description: "Event type. Ex. EMAIL_DELIVERED"
+        x-nullable: false
+
+  eventOutputExternal:
+    type: object
+    required:
+      - id
+      - eventCategory
+      - eventEntity
+      - eventType
+      - timestamp
+    properties:
+      id:
+        type: string
+        maxLength: 36
+      eventCategory:
+        type: string
+        description: "First-level event category"
+        enum:
+          - ENGAGEMENT
+        x-nullable: false
+      eventEntity:
+        type: string
+        description: "Event entity"
+        enum:
+          - EMAIL
+          - PROSPECT
+          - REPORT
+          - MAILBOX
+        x-nullable: false
+      eventType:
+        type: string
+        description: "Event type. Ex. EMAIL_DELIVERED."
+        x-nullable: false
+      timestamp:
+        type: string
+        format: date-time
+        x-nullable: false
+      meta:
+        type: object
+        description:
+          "Key pair values of any additional parameter related to the event"
+        additionalProperties:
+          type: string
+
+  eventResultsExternal:
+    type: object
+    required:
+      - events
+    properties:
+      events:
+        type: array
+        items:
+          $ref: "#/definitions/eventOutputExternal"
+      pageToken:
+        type: string
+        x-omitempty: false
+
+  ######################################################################################################################
+  ######################################################################################################################
+  ## Common definitions
+
+  ## Error response
+  errorResponse:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        default: "Internal error"
+
+  ## Not found response
+  notFoundResponse:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        default: "Not found"
+
+  ## Bad input response
+  badInputResponse:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        default: "Bad input"
+
+  ## Not allowed response
+  notAllowedResponse:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        default: "Not allowed"
+
+  ## OK response
+  okResponse:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        default: "OK"
+
+  ## OK response
+  postOkResponse:
+    type: object
+    required:
+      - id
+    properties:
+      # ID is used to retrieve a record
+      id:
+        type: string
+        maxLength: 36
+
+paths:
+  /api/ws/v1/live/subscriptions/events:
+    get:
+      security:
+        - access_token: []
+      description: "Subscribe to live events"
+      schemes:
+        - ws
+      operationId: "LiveEvents"
+      responses:
+        200:
+          description: ""
+
+  ## Subscription end point for third party apps to register for push notifications
+  /api/v1/events/subscriptions:
+    post:
+      description: "Create a subscription to receive push notifications for an event"
+      operationId: "CreateEventSubscription"
+      security:
+        - bearer: []
+      parameters:
+        - in: "body"
+          name: "createEventSubscriptionInput"
+          required: true
+          x-nullable: false
+          schema:
+            $ref: "#/definitions/createEventSubscriptionInput"
+      responses:
+        201:
+          description: "OK"
+          schema:
+            $ref: "#/definitions/postOkResponse"
+        400:
+          description: "Bad request"
+          schema:
+            $ref: "#/definitions/badInputResponse"
+        401:
+          description: "Not allowed"
+          schema:
+            $ref: "#/definitions/notAllowedResponse"
+        500:
+          description: "Internal error"
+          schema:
+            $ref: "#/definitions/errorResponse"
+
+  /api/v1/events/subscriptions/{subscriptionId}:
+    delete:
+      description: "Delete a subscription given the provided subscription id with immediate effect"
+      operationId: "DeleteEventSubscription"
+      security:
+        - bearer: []
+      parameters:
+        - in: "path"
+          name: "subscriptionId"
+          type: string
+          required: true
+          description: "Id of subscription being deleted."
+      responses:
+        200:
+          description: "OK"
+          schema:
+            $ref: "#/definitions/okResponse"
+        401:
+          description: "Not allowed"
+          schema:
+            $ref: "#/definitions/notAllowedResponse"
+        404:
+          description: "Not found"
+          schema:
+            $ref: "#/definitions/notFoundResponse"
+        500:
+          description: "Internal error"
+          schema:
+            $ref: "#/definitions/errorResponse"
+
+  /api/v1/events:
+    get:
+      description: "Get Events"
+      operationId: "GetEventsExternal"
+      security:
+        - bearer: []
+      parameters:
+        - in: "query"
+          name: "token"
+          type: string
+          required: false
+          description: "Token"
+        - in: "query"
+          name: "event_category"
+          type: string
+          enum: [ENGAGEMENT]
+          description: "Event category"
+          required: true
+        - in: "query"
+          name: "event_entity"
+          type: string
+          description: "Event entity"
+          required: false
+        - in: "query"
+          name: "event_type"
+          type: string
+          description: "Event type"
+          required: false
+      responses:
+        200:
+          description: "Requested Events"
+          schema:
+            $ref: "#/definitions/eventResultsExternal"
+        400:
+          description: "Bad request"
+          schema:
+            $ref: "#/definitions/badInputResponse"
+        401:
+          description: "Not allowed"
+          schema:
+            $ref: "#/definitions/notAllowedResponse"
+        500:
+          description: "Internal error"
+          schema:
+            $ref: "#/definitions/errorResponse"
